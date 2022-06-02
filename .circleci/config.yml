@@ -37,52 +37,55 @@ commands:
 
 jobs:
 
-  # build-backend:
-  #   docker:
-  #     - image: cimg/ruby:2.7.6
-  #   steps:
-  #     - checkout
-  #     - restore_cache:
-  #         keys: [backend-build]
-  #     - run:
-  #         name: Rails build
-  #         command: |
-  #           cd backend
-  #           npm install
-  #           npm run build
-  #     - save_cache:
-  #         paths: [backend/node_modules]
-  #         key: backend-build
-
-  test-backend:
+  build-app:
     docker:
       - image: cimg/ruby:2.7.6
     steps:
       - checkout
-      # - restore_cache:
-      #     keys: [backend-build]
+      - restore_cache:
+          key: v1-dependencies-{{ checksum "Gemfile.lock" }}
       - run:
-          name: run bundle install
+          name: Bundle install
           command: |
             bundle install
+      - save_cache:
+          key: v1-dependencies-{{ checksum "Gemfile.lock" }}
+          paths:
+            - /home/circleci/project/vendor/bundle
+
+  test-app:
+    environment:
+      BUNDLE_PATH: /home/circleci/project/vendor/bundle
+    docker:
+      - image: cimg/ruby:2.7.6
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-dependencies-{{ checksum "Gemfile.lock" }}
       - run:
-          name: Run back-end test
+          name: Install dependencies
+          command: |
+            bundle install --path BUNDLE_PATH
+      - run:
+          name: Run RSpec tests
           command: |
             bundle exec rspec
 
-  scan-backend:
+  scan-app:
+    environment:
+      BUNDLE_PATH: /home/circleci/project/vendor/bundle
     docker:
       - image: cimg/ruby:2.7.6
     steps:
       - checkout
-      # - restore_cache:
-      #     keys: [backend-build]
+      - restore_cache:
+          key: v1-dependencies-{{ checksum "Gemfile.lock" }}
       - run:
-          name: run bundle install
+          name: Install dependencies
           command: |
-            bundle install
+            bundle install --path BUNDLE_PATH
       - run:
-          name: Run lint
+          name: Lint with Rubocop
           command: |
             bundle exec rubocop
 
@@ -302,13 +305,11 @@ jobs:
 workflows:
   default:
     jobs:
-      - test-backend
-      - scan-backend
-      # - build-backend
-      # - test-backend:
-      #     requires: [build-backend]
-      # - scan-backend:
-      #     requires: [build-backend]
+      - build-app
+      - test-app:
+          requires: [build-app]
+      - scan-app:
+          requires: [build-app]
       # - deploy-infrastructure:
       #     requires: [test-backend, scan-backend]
       #     filters:
