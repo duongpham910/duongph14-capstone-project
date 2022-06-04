@@ -88,6 +88,24 @@ jobs:
           command: |
             bundle exec rubocop
 
+  upload-docker:
+    docker:
+      - image: cimg/go:1.17
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 20.10.14
+          docker_layer_caching: true
+      - run:
+          name: Build and push Docker image
+          command: |
+            DOCKERPATH=duongpham910/rails-capstone-project:v0.0.$CIRCLE_BUILD_NUM
+
+            docker build --tag=rails-capstone-project .
+            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+            docker tag rails-capstone-project $DOCKERPATH
+            docker push $DOCKERPATH
+
   # deploy-infrastructure:
   #   docker:
   #     - image: amazon/aws-cli
@@ -309,6 +327,8 @@ workflows:
           requires: [build-app]
       - scan-app:
           requires: [build-app]
+      - upload-docker:
+          requires: [test-app, scan-app]
       # - deploy-infrastructure:
       #     requires: [test-backend, scan-backend]
       #     filters:
