@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: rails-app
-        image: "duongpham910/rails-capstone-project{{ lookup('env', 'VERSION')}}"
+        image: duongpham910/rails-capstone-project:tag
         ports:
         - containerPort: 3000
