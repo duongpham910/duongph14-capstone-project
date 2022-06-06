@@ -90,7 +90,7 @@ jobs:
 
   upload-docker:
     docker:
-      - image: cimg/go:1.17
+      - image: cimg/ruby:2.7.6
     steps:
       - checkout
       - setup_remote_docker:
@@ -106,41 +106,55 @@ jobs:
             docker tag rails-capstone-project $DOCKERPATH
             docker push $DOCKERPATH
 
-  # deploy-infrastructure:
-  #   docker:
-  #     - image: amazon/aws-cli
-  #   steps:
-  #     - checkout
-  #     - run: yum install -y tar gzip
-  #     - run:
-  #         name: Ensure back-end infrastructure exists
-  #         command: |
-  #           aws cloudformation deploy \
-  #             --template-file .circleci/files/backend.yml \
-  #             --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-  #             --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"  \
-  #             --tags project=udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}
-  #     - run:
-  #         name: Ensure front-end infrastructure exist
-  #         command: |
-  #           aws cloudformation deploy \
-  #             --template-file .circleci/files/frontend.yml \
-  #             --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}" \
-  #             --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}" \
-  #             --tags project=udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}
-  #     - run:
-  #         name: Add back-end ip to ansible inventory
-  #         command: |
-  #           aws ec2 describe-instances \
-  #             --query 'Reservations[*].Instances[*].PublicIpAddress' \
-  #             --filters Name=tag:Name,Values="backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-  #             --output text >> .circleci/ansible/inventory.txt
-  #     - persist_to_workspace:
-  #         root: ~/
-  #         paths:
-  #           - project/.circleci/ansible/inventory.txt
-  #     - destroy-environment:
-  #         workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
+  deploy-infrastructure:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            yum install -y tar gzip curl
+      - run:
+          name: Install eksctl
+          command: |
+            curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" | tar xvzf -C /tmp
+            mv /tmp/eksctl /usr/local/bin
+      - run:
+          name: Create cluster
+          command: |
+            eksctl create cluster \
+              --name eksctl-${CIRCLE_WORKFLOW_ID:0:7} \
+              --region=us-west-1 \
+              --instance-types=t3.micro
+
+  deploy-cluster:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update tar gzip curl
+            pip3 install awscli
+      - run:
+          name: Install kubectl
+          command: |
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+            kubectl version --client
+      - run:
+          name: Update kube config
+          command: |
+            aws eks update-kubeconfig --region us-west-1 --name eksctl-${CIRCLE_WORKFLOW_ID:0:7}
+      - run:
+          name: Deploy rails container to eks cluster
+          command: |
+            kubectl apply -f eks-container-deployment.yaml
+            kubectl apply -f eks-loadbalancer-service.yaml
+            # See the status
+            kubectl get deploy,rs,svc,pods
 
   # configure-infrastructure:
   #   docker:
@@ -329,13 +343,10 @@ workflows:
           requires: [build-app]
       - upload-docker:
           requires: [test-app, scan-app]
-      # - deploy-infrastructure:
-      #     requires: [test-backend, scan-backend]
-      #     filters:
-      #       branches:
-      #         only: [master]
-      # - configure-infrastructure:
-      #     requires: [deploy-infrastructure]
+      - deploy-infrastructure:
+          requires: [test-app, scan-app]
+      - deploy-cluster:
+          requires: [upload-docker, deploy-infrastructure]
       # - run-migrations:
       #     requires: [configure-infrastructure]
       # - deploy-backend:
