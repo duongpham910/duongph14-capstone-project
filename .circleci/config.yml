@@ -1,40 +1,5 @@
 version: 2.1
 
-commands:
-  destroy-environment:
-    description: Destroy backend and frontend cloudformation stacks given a workflow ID.
-    parameters:
-      workflow_id:
-        type: string
-    steps:
-      - run:
-          name: Destroy environments
-          when: on_fail
-          command: |
-            echo "Destroying environment: << parameters.workflow_id >> "
-            aws cloudformation delete-stack --stack-name udapeople-backend-<< parameters.workflow_id >>
-            aws s3 rm s3://udapeople-<<parameters.workflow_id>> --recursive
-            aws cloudformation delete-stack --stack-name udapeople-frontend-<< parameters.workflow_id >>
-
-  revert-migrations:
-    description: Revert the last migration
-    parameters:
-      workflow_id:
-        type: string
-    steps:
-      - run:
-          name: Revert migrations
-          when: on_fail
-          command: |
-            SUCCESS=$(curl --insecure  https://kvdb.io/CAaGusCeKyezrNWgEh6TWn/migration_<< parameters.workflow_id >>)
-            # Logic for reverting the database state
-            if (( $SUCCESS == 1 ));
-            then
-                cd ~/project/backend
-                npm install
-                npm run migrations:revert
-            fi
-
 jobs:
   build-app:
     docker:
@@ -82,10 +47,18 @@ jobs:
           name: Install dependencies
           command: |
             bundle install --path vendor/bundle
+            # Install hadolint
+            sudo wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/download/v1.16.3/hadolint-Linux-x86_64 &&\
+                sudo chmod +x /bin/hadolint
       - run:
-          name: Lint with Rubocop
+          name: Lint rubocop
           command: |
             bundle exec rubocop
+
+      - run:
+          name: Lint docker
+          command: |
+            hadolint Dockerfile
 
   upload-docker:
     docker:
@@ -126,7 +99,9 @@ jobs:
             eksctl create cluster \
               --name eksctl-${CIRCLE_WORKFLOW_ID:0:7} \
               --region=us-west-1 \
-              --instance-types=t3.micro
+              --instance-types=t3.micro \
+              --tags="version=${CIRCLE_WORKFLOW_ID:0:7}" \
+              --nodegroup-name ng-${CIRCLE_WORKFLOW_ID:0:7}
 
   deploy-cluster:
     docker:
@@ -158,6 +133,44 @@ jobs:
             sleep 5
             kubectl get deploy,rs,svc,pods
 
+  cleanup:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update tar gzip curl
+            pip3 install awscli
+      - run:
+          name: Install kubectl
+          command: |
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+            kubectl version --client
+      - run:
+          name: Update kube config
+          command: |
+            aws eks update-kubeconfig --region us-west-1 --name eksctl-${CIRCLE_WORKFLOW_ID:0:7}
+      - run:
+          name: Remove old stacks and files
+          command: |
+            export OldWorkflowID=$(aws cloudformation \
+                    describe-stacks --query "Stacks[2].Tags[?Key=='version'].Value" \
+                    --no-paginate --output text)
+
+            echo OldWorkflowID: "${OldWorkflowID}"
+
+            if [[ "${CIRCLE_WORKFLOW_ID:0:7}" != "${OldWorkflowID}" ]]
+            then
+              kubectl delete all --all
+              aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-nodegroup-ng-${OldWorkflowID}"
+              aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-cluster"
+            else
+              echo "Cannot cleanup"
+            fi
+
 workflows:
   default:
     jobs:
@@ -172,11 +185,5 @@ workflows:
           requires: [test-app, scan-app]
       - deploy-cluster:
           requires: [upload-docker, deploy-infrastructure]
-      # - run-migrations:
-      #     requires: [configure-infrastructure]
-      # - deploy-backend:
-      #     requires: [run-migrations]
-      # - smoke-test:
-      #     requires: [deploy-backend]
-      # - cleanup:
-      #     requires: [smoke-test]
+      - cleanup:
+          requires: [deploy-cluster]
