@@ -152,16 +152,20 @@ jobs:
       - run:
           name: Update kube config
           command: |
-            aws eks update-kubeconfig --region us-west-1 --name eksctl-${CIRCLE_WORKFLOW_ID:0:7}
-      - run:
-          name: Get old cluster workflow id
-          command: |
             export OldWorkflowID=$(aws cloudformation \
                     describe-stacks --query "Stacks[2].Tags[?Key=='version'].Value" \
-                    --no-paginate --output text)
+                    --region us-west-1 --no-paginate --output text)
+
+            echo OldWorkflowID: "${OldWorkflowID}"
+
+            aws eks update-kubeconfig --region us-west-1 --name eksctl-${OldWorkflowID}
       - run:
           name: Remove old stacks and files
           command: |
+            export OldWorkflowID=$(aws cloudformation \
+                    describe-stacks --query "Stacks[2].Tags[?Key=='version'].Value" \
+                    --region us-west-1 --no-paginate --output text)
+
             echo OldWorkflowID: "${OldWorkflowID}"
 
             if [[ "${CIRCLE_WORKFLOW_ID:0:7}" != "${OldWorkflowID}" ]]
