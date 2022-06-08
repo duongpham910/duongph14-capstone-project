@@ -133,6 +133,52 @@ jobs:
             sleep 5
             kubectl get deploy,rs,svc,pods
 
+  smoke-test:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update curl jq
+            pip3 install awscli
+      - run:
+          name: Install kubectl
+          command: |
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+            kubectl version --client
+      - run:
+          name: Update kube config
+          command: |
+            aws eks update-kubeconfig --region us-west-1 --name eksctl-${CIRCLE_WORKFLOW_ID:0:7}
+      - run:
+          name: Backend smoke test.
+          command: |
+            kubectl get svc kubernetes-rails-load-balancer
+
+            export EXTERNAL_IP=$(kubectl get svc kubernetes-rails-load-balancer -o json | jq -r .status.loadBalancer.ingress[0].hostname)
+            export API_URL="http://${EXTERNAL_IP}"
+            echo "${API_URL}"
+            if curl "${API_URL}" | grep "Hello World"
+            then
+                return 0
+            else
+                return 1
+            fi
+      - run:
+          name: Frontend smoke test.
+          command: |
+            URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-west-1.amazonaws.com/#/employees"
+            echo ${URL}
+            if curl -s ${URL} | grep "Welcome"
+            then
+              return 0
+            else
+              return 1
+            fi
+
   cleanup:
     docker:
       - image: python:3.7-alpine3.11
@@ -191,5 +237,7 @@ workflows:
           requires: [test-app, scan-app]
       - deploy-cluster:
           requires: [upload-docker, deploy-infrastructure]
+      - smoke-test:
+          requires: [deploy-cluster]
       - cleanup:
           requires: [deploy-cluster]
