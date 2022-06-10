@@ -228,4 +228,4 @@ workflows:
       - smoke-test:
           requires: [deploy-cluster]
       - cleanup:
-          requires: [deploy-cluster]
+          requires: [smoke-test]
