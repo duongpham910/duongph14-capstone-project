@@ -156,13 +156,7 @@ jobs:
       - run:
           name: Backend smoke test.
           command: |
-            echo "$(kubectl get svc kubernetes-rails-load-balancer -o json | jq -r .status.loadBalancer.ingress[0].hostname)" > external_ip.txt
-            echo "$(cat external_ip.txt)"
-
-            sed -i "s/\*\*\*\*\*\*\*\*\*/us-west-1/g" external_ip.txt
-            echo "$(cat external_ip.txt)"
-
-            export API_URL="http://$(cat external_ip.txt)"
+            export API_URL="http://$(kubectl get svc kubernetes-rails-load-balancer -o json | jq -r .status.loadBalancer.ingress[0].hostname)"
             echo "${API_URL}"
             if curl "${API_URL}" | grep "Hello World"
             then
@@ -199,11 +193,6 @@ jobs:
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
             kubectl version --client
       - run:
-          name: Install eksctl
-          command: |
-            curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/v0.100.0/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
-            mv /tmp/eksctl /usr/local/bin
-      - run:
           name: Update kube config
           command: |
             export OldWorkflowID=$(aws cloudformation \
@@ -225,9 +214,9 @@ jobs:
             if [[ "${CIRCLE_WORKFLOW_ID:0:7}" != "${OldWorkflowID}" ]]
             then
               kubectl delete all --all
-              # aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-nodegroup-ng-${OldWorkflowID}"
-              # aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-cluster"
-              eksctl delete cluster --region us-west-1 --name "eksctl-${OldWorkflowID}"
+              aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-nodegroup-ng-${OldWorkflowID}"
+              sleep 5
+              aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-cluster"
             else
               echo "Cannot cleanup"
             fi
