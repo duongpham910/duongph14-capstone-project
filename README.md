@@ -1,24 +1,37 @@
 # README
+[![CircleCI](https://circleci.com/gh/duongpham910/duongph14-capstone-project/tree/master.svg?style=svg)](https://circleci.com/gh/duongpham910/duongph14-capstone-project/tree/master)
 
-This README would normally document whatever steps are necessary to get the
-application up and running.
+## Project Overview
 
-Things you may want to cover:
+In this project, I just create a static page using ruby on rails
 
-* Ruby version
+### Project Tasks
 
-* System dependencies
+In this project you will apply the skills and knowledge which were developed throughout the Cloud DevOps Nanodegree program:
 
-* Configuration
+* Working in AWS
 
-* Database creation
+* Using Circle CI to implement Continuous Integration and Continuous Deployment
 
-* Database initialization
+* Building pipelines
 
-* How to run the test suite
+* Working CloudFormation to deploy clusters
 
-* Services (job queues, cache servers, search engines, etc.)
+* Building Kubernetes clusters
 
-* Deployment instructions
+* Building Docker containers in pipelines
 
-* ...
+### Running `rails server`
+
+1. Standalone:  `rails s`
+2. Run in Docker:  `./run_docker.sh`
+
+### Kubernetes Steps
+
+* Setup and Configure Docker locally
+
+* Setup and Configure Kubernetes locally
+
+* Create Rails app in Container
+
+* Run via kubectl
