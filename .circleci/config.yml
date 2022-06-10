@@ -154,22 +154,12 @@ jobs:
           command: |
             aws eks update-kubeconfig --region us-west-1 --name eksctl-${CIRCLE_WORKFLOW_ID:0:7}
       - run:
-          name: Backend smoke test.
+          name: LoadBalancer smoke test.
           command: |
             export API_URL="http://$(kubectl get svc kubernetes-rails-load-balancer -o json | jq -r .status.loadBalancer.ingress[0].hostname)"
             echo "${API_URL}"
+            sleep 60
             if curl "${API_URL}" | grep "Hello World"
-            then
-              return 0
-            else
-              return 1
-            fi
-      - run:
-          name: Frontend smoke test.
-          command: |
-            URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-west-1.amazonaws.com/#/employees"
-            echo ${URL}
-            if curl -s ${URL} | grep "Welcome"
             then
               return 0
             else
@@ -214,9 +204,9 @@ jobs:
             if [[ "${CIRCLE_WORKFLOW_ID:0:7}" != "${OldWorkflowID}" ]]
             then
               kubectl delete all --all
-              aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-nodegroup-ng-${OldWorkflowID}"
+              aws cloudformation delete-stack --stack-name --region us-west-1 "eksctl-eksctl-${OldWorkflowID}-nodegroup-ng-${OldWorkflowID}"
               sleep 5
-              aws cloudformation delete-stack --stack-name "eksctl-eksctl-${OldWorkflowID}-cluster"
+              aws cloudformation delete-stack --stack-name --region us-west-1 "eksctl-eksctl-${OldWorkflowID}-cluster"
             else
               echo "Cannot cleanup"
             fi
