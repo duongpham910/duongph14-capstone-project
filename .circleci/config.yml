@@ -205,7 +205,7 @@ jobs:
             then
               kubectl delete all --all
               aws cloudformation delete-stack --stack-name --region us-west-1 "eksctl-eksctl-${OldWorkflowID}-nodegroup-ng-${OldWorkflowID}"
-              sleep 5
+              sleep 60
               aws cloudformation delete-stack --stack-name --region us-west-1 "eksctl-eksctl-${OldWorkflowID}-cluster"
             else
               echo "Cannot cleanup"
